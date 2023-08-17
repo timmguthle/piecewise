@@ -21,8 +21,8 @@ for row in range(2):
 
 # Colors for dark and light squares 
 #BOARD_COLORS = (py.Color(228,234,193), py.Color(101, 137, 67)) # chess.comm color theme
-#BOARD_COLORS = (py.Color('light grey'), py.Color('cadetblue4'))
-BOARD_COLORS = (py.Color(254, 203, 136), py.Color(159, 90, 50))
+BOARD_COLORS = (py.Color('light grey'), py.Color('cadetblue4'))
+#BOARD_COLORS = (py.Color(254, 203, 136), py.Color(159, 90, 50))
 HIGHLIGHT_COLOR = py.Color('yellowgreen')
 TARGET_COLOR = py.Color('sienna3')
 
