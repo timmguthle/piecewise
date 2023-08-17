@@ -241,3 +241,19 @@ in_between = np.zeros((64,64), dtype=np.uint64)
 for sq in range(64):
     in_between[sq] = gen_in_between_array(sq)
 
+def coordinates_to_sq_nr(pos, SQ):
+    ''' 
+    Return sq_nr between 0 and 63 
+    '''
+    rank = 7 - (pos[1] // SQ)
+    file = pos[0] // SQ
+    return int((rank * 8) + file)
+
+def get_sq_from_bitboard(bitboard:np.uint64):
+    sq_list = []
+    while bitboard:
+        lsb = bitboard & -bitboard
+        sq_list.append(int(np.log2(lsb)))
+        bitboard &= bitboard - np.uint64(1)
+
+    return sq_list

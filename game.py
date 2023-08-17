@@ -1,7 +1,9 @@
 from engine import GameState
 import support as sp
+import search 
 import numpy as np
 import pygame as py
+import time
 
 py.init()
 
@@ -12,7 +14,7 @@ FPS = 30
 
 # Import PNGs of Pieces
 IMAG = []
-all_pieces = py.image.load('chess_pieces.png')
+all_pieces = py.image.load('assets/chess_pieces.png')
 # maps bitboard position to imag position
 pm = {0:6, 1:7, 2:8, 3:9, 4:10, 5:11, 6:0, 7:1, 8:2, 9:3, 10:4, 11:5}
 for row in range(2):
@@ -21,10 +23,13 @@ for row in range(2):
 
 # Colors for dark and light squares 
 #BOARD_COLORS = (py.Color(228,234,193), py.Color(101, 137, 67)) # chess.comm color theme
-BOARD_COLORS = (py.Color('light grey'), py.Color('cadetblue4'))
-#BOARD_COLORS = (py.Color(254, 203, 136), py.Color(159, 90, 50))
+#BOARD_COLORS = (py.Color('light grey'), py.Color('cadetblue4'))
+BOARD_COLORS = (py.Color(254, 203, 136), py.Color(159, 90, 50))
 HIGHLIGHT_COLOR = py.Color('yellowgreen')
 TARGET_COLOR = py.Color('sienna3')
+
+black_bot = True
+white_bot = True
 
 
 def main():
@@ -45,23 +50,39 @@ def main():
             if event.type == py.QUIT:
                 running = False
 
-            if event.type == py.MOUSEBUTTONDOWN:
-                # make moves 
-                
-                if Square_highlighted == None:
-                    fr = np.left_shift(1, coordinates_to_sq_nr(py.mouse.get_pos()), dtype=np.uint64)
-                    if (state.White_to_move and fr & state.white != 0) or (not state.White_to_move and fr & state.black !=0):
-                        Square_highlighted = coordinates_to_sq_nr(py.mouse.get_pos())
-                        legal_moves = state.Generate_legal_moves(Square_highlighted)
+            if event.type == py.KEYDOWN and event.key == 1073741904: # arrow left key
+                state.unmake_move()
 
-                else:
-                    move_try = (Square_highlighted, coordinates_to_sq_nr(py.mouse.get_pos()))
-                    to = np.left_shift(1, move_try[1], dtype=np.uint64)
-                    if legal_moves & to != 0:
-                        state.make_move(move_try)
-                        
-                    Square_highlighted = None
-                    legal_moves = np.uint64(0)
+
+            # only for human players
+            if event.type == py.MOUSEBUTTONDOWN and state.result == None:
+                # make moves 
+                if (not white_bot and state.White_to_move) or (not black_bot and not state.White_to_move):
+                    if Square_highlighted == None:
+                        fr = np.left_shift(1, sp.coordinates_to_sq_nr(py.mouse.get_pos(), SQ), dtype=np.uint64)
+                        if (state.White_to_move and fr & state.white != 0) or (not state.White_to_move and fr & state.black !=0):
+                            Square_highlighted = sp.coordinates_to_sq_nr(py.mouse.get_pos(), SQ)
+                            legal_moves = state.Generate_legal_moves(Square_highlighted)
+
+                    else:
+                        move_try = (Square_highlighted, sp.coordinates_to_sq_nr(py.mouse.get_pos(), SQ))
+                        to = np.left_shift(1, move_try[1], dtype=np.uint64)
+                        if legal_moves & to != 0:
+                            state.make_move(move_try)
+                            
+                        Square_highlighted = None
+                        legal_moves = np.uint64(0)
+
+        # only bot player
+        if ((state.White_to_move and white_bot) or (not state.White_to_move and black_bot)) and state.result == None:
+            valid_moves = state.generate_all_valid_moves()
+            if len(valid_moves) == 0:
+                state.determin_result()
+            else:
+                state.make_move(search.find_move(valid_moves))
+
+        if state.result != None:
+            print(f'Game over! \n Result: {state.result}')
 
   
         draw(screen, state, Square_highlighted, legal_moves)
@@ -108,13 +129,6 @@ def highlight_possible_moves(screen:py.Surface, legal_moves):
             rank = 7 - sq // 8
             screen.fill(TARGET_COLOR, py.Rect(file * SQ, rank * SQ, SQ, SQ))
 
-def coordinates_to_sq_nr(pos):
-    ''' 
-    Return sq_nr between 0 and 63 
-    '''
-    rank = 7 - (pos[1] // SQ)
-    file = pos[0] // SQ
-    return int((rank * 8) + file)
 
 
 if __name__ == '__main__':

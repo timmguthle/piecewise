@@ -12,7 +12,10 @@ class GameState(object):
         self.black = np.uint64(0)
         self.white = np.uint64(0)
         self.update_bb()
+        self.move_log = []
+        self.last_capture = 0
         self.White_to_move = True
+        self.result = None # 0 for draw, -1 for black wins, 1 for white wins
         # concerning moves
         self.en_passant_next_move = False
         self.castle_WK = True
@@ -22,10 +25,10 @@ class GameState(object):
         self.check = False
         self.checkmate = None
         # load lookup tables
-        self.rook_magic_numbers = np.load('rook_magic_numbers.npy', allow_pickle=True)
-        self.rook_magic_lookup = np.load('rook_magic_lookup.npy', allow_pickle=True)
-        self.bishop_magic_numbers = np.load('bishop_magic_numbers.npy', allow_pickle=True)
-        self.bishop_magic_lookup = np.load('bishop_magic_lookup.npy', allow_pickle=True)
+        self.rook_magic_numbers = np.load('assets/rook_magic_numbers.npy', allow_pickle=True)
+        self.rook_magic_lookup = np.load('assets/rook_magic_lookup.npy', allow_pickle=True)
+        self.bishop_magic_numbers = np.load('assets/bishop_magic_numbers.npy', allow_pickle=True)
+        self.bishop_magic_lookup = np.load('assets/bishop_magic_lookup.npy', allow_pickle=True)
 
     def update_bb(self):
         self.black = np.uint64(0)
@@ -42,6 +45,56 @@ class GameState(object):
         s = np.binary_repr(b, width=64)
         print(s)
 
+    def unmake_move(self):
+        '''
+        unmake the given move. I dont think I can do without this function... 
+
+        use self.move_log to find out information on last move
+        '''
+        if len(self.move_log) != 0:
+            move_info = self.move_log.pop(-1)
+        else:
+            return
+        
+        self.castle_BQ, self.castle_BK, self.castle_WK, self.castle_WQ = move_info.get('castling_rights')
+        self.en_passant_next_move = move_info.get('en_passant_possible')
+        self.last_capture = move_info.get('last_capture')
+        move = move_info.get('move')
+        pieces = move_info.get('pieces') # fist entry is moved piece
+
+        if move_info.get('just_castled'): # reverse castling 
+            if pieces[0] == 4:
+                self.p[4] = np.right_shift(1, 60, dtype=np.uint64)
+                if move[1] == 63:
+                    self.p[0] ^= (np.left_shift(1, 63, dtype=np.uint64) | np.left_shift(1, 61, dtype=np.uint64))
+                elif move[1] == 56:
+                    self.p[0] ^= (np.left_shift(1, 56, dtype=np.uint64) | np.left_shift(1, 59, dtype=np.uint64))
+            elif pieces[0] == 10:
+                self.p[10] = np.right_shift(1, 4, dtype=np.uint64)
+                if move[1] == 7:
+                    self.p[6] ^= (np.left_shift(1, 7, dtype=np.uint64) | np.left_shift(1, 5, dtype=np.uint64))
+                elif move[1] == 0:
+                    self.p[6] ^= (np.left_shift(1, 0, dtype=np.uint64) | np.left_shift(1, 3, dtype=np.uint64))
+        elif move_info.get('promotion'):
+            if pieces[0] == 5: # black pawn
+                self.p[3] ^= np.left_shift(1, move[1], dtype=np.uint64)
+            elif pieces[0] == 11: # white pawn
+                self.p[9] ^= np.left_shift(1, move[1], dtype=np.uint64)
+        elif move_info.get('en_passant'):
+            if pieces[0] == 5: # black pawn
+                self.p[11] ^= np.left_shift(1, (move[1] + 8), dtype=np.uint64)
+            if pieces[0] == 11: # white pawn
+                self.p[5] ^= np.left_shift(1, (move[1] - 8), dtype=np.uint64)
+
+        if pieces[1] != None:
+            self.p[pieces[1]] ^= np.left_shift(1, move[1], dtype=np.uint64)
+
+        self.p[pieces[0]] ^= (np.left_shift(1, move[0], dtype=np.uint64) | np.left_shift(1, move[1], dtype=np.uint64))
+
+        self.update_bb()
+        self.White_to_move = not self.White_to_move
+
+
     def make_move(self, move):
         '''
         changes bitboards according to move argument, put in only valid moves
@@ -49,11 +102,15 @@ class GameState(object):
         f, t = np.left_shift(1, move[0], dtype=np.uint64), np.left_shift(1, move[1], dtype=np.uint64)
         figure = self.figure_on_square(move[0])
         castl = False
+        promotion = False
+        en_passant = False
         # handle castling
-        if figure == 4 and self.figure_on_square(move[1]) == 0 and (move[1] == 63 or move[1] == 56): # castling black
+        if figure == 4 and self.figure_on_square(move[1]) == 0 and (move[1] == 63 or move[1] == 56)\
+            and (self.castle_BK or self.castle_BQ): # castling black
             # comment on if statment above:
             #   the problem is that if targer sq is empty the function figure_on_square returns False (is needed of game drawing...)
             #   so I check if target sq is on of the rook starting sq, not very elegant... but should work
+            # there is more to the story... if appears that black can just spawn two new rooks be goning to h8... 
             castl = True
             if move[1] == 63:
                 self.p[4] = np.left_shift(1, 62, dtype=np.uint64)
@@ -72,24 +129,22 @@ class GameState(object):
                 self.p[6] ^= (np.left_shift(1, 0, dtype=np.uint64) | np.left_shift(1, 3, dtype=np.uint64))
 
         # delete figure on target square if there was a capture
+        capture = None
+        old_last_capture = self.last_capture
         if self.o & t != 0 and not castl:
-            self.p[self.figure_on_square(move[1])] ^= t
+            capture = self.figure_on_square(move[1])
+            self.last_capture = len(self.move_log) # to determine draw by 50 move rule
+            self.p[capture] ^= t
 
         # delete en passant captured pawn
         if (figure == 11 or figure == 5) and move[1] % 8 != move[0] % 8 and self.o & t == 0: # conditions for en passant 
+            en_passant = True
             if figure == 11:
                 self.p[5] ^= np.right_shift(t, 8, dtype=np.uint64)
             if figure == 5:
                 self.p[11] ^= np.left_shift(t, 8, dtype=np.uint64)
         
-        # check if the next move could be en passant 
-        self.en_passant_next_move = np.uint64(0)
-        # white pawn double push
-        if figure == 11 and move[1] - move[0] > 10:
-            self.en_passant_next_move = np.left_shift(1, move[0] + 8, dtype=np.uint64)
-        # black pawn
-        if figure == 5 and move[0] - move[1] > 10:
-            self.en_passant_next_move = np.left_shift(1, move[0] - 8, dtype=np.uint64)
+       
             
 
         # upadate bitboard of moved piece
@@ -98,16 +153,42 @@ class GameState(object):
 
         # promoting for white
         if figure == 11 and move[1] // 8 == 7:
+            promotion = True
             self.p[11] ^= t # del the newly places pawn on target sq
             self.p[9] ^= t # add Queen on target square
         # promoting for black
         if figure == 5 and move[1] // 8 == 0:
+            promotion = True
             self.p[5] ^= t # del the newly places pawn on target sq
             self.p[3] ^= t # add Queen on target square
 
         # update occupied positions and change 'to_move'
         self.update_bb()
         self.White_to_move = not self.White_to_move
+
+
+
+        # save move in move_log to make reversal possible
+        move_info = {
+            'move':move,
+            'pieces':(figure, capture),
+            'just_castled':castl,
+            'castling_rights':(self.castle_BQ, self.castle_BK, self.castle_WK, self.castle_WQ), # in unmake move these can just be copied
+            'promotion': promotion,
+            'en_passant': en_passant,
+            'en_passant_possible': self.en_passant_next_move,
+            'last_capture': old_last_capture,
+        }
+        self.move_log.append(move_info)
+
+        # check if the next move could be en passant 
+        self.en_passant_next_move = np.uint64(0)
+        # white pawn double push
+        if figure == 11 and move[1] - move[0] > 10:
+            self.en_passant_next_move = np.left_shift(1, move[0] + 8, dtype=np.uint64)
+        # black pawn
+        if figure == 5 and move[0] - move[1] > 10:
+            self.en_passant_next_move = np.left_shift(1, move[0] - 8, dtype=np.uint64)
 
         self.update_castling_possibilities(move)
 
@@ -118,11 +199,10 @@ class GameState(object):
             self.check = self.attacks_on_king(int(np.log2(self.p[4])), self.o, False)
 
 
+        # check for 50 move rule
+        if self.last_capture + 100 <= len(self.move_log):
+            self.result = 0 # draw
 
-        # print from where the white king in unter attack
-        # sp.print_nice_bitboard(self.rook_x_ray(int(np.log2(self.p[10])), self.white))
-        if self.check:
-            sp.print_nice_bitboard(self.check)
 
 
     def update_castling_possibilities(self, move):
@@ -143,40 +223,16 @@ class GameState(object):
             if piece == 0 and move[0] == 63:
                 self.castle_BK = False
 
+    def generate_all_valid_moves(self):
+        moves = []
+        own_color = self.White_to_move * self.white + (not self.White_to_move) * self.black
+        for sq in range(64): # maybe the approach with while own_color is better here idk...
+            if own_color & np.left_shift(1, sq, dtype=np.uint64):
+                move_from_sq = sp.get_sq_from_bitboard(self.Generate_legal_moves(sq))
+                for target in move_from_sq:
+                    moves.append((sq, target))
 
-
-    def check_move_validity(self, move_try):
-        '''
-        Check proposed move for validity, if valid make move, if not do nothing
-
-        move_try: list with form (from, to) sq_nr
-
-        WARNING: THIS FUNCTION WILL PROBABLY BE OBSOLETE SOON
-        '''
-
-        f, t = np.left_shift(1, move_try[0], dtype=np.uint64), np.left_shift(1, move_try[1], dtype=np.uint64)
-        # sort out basic stuff
-        # only move own pices
-        if self.White_to_move and (self.white & f == 0):
-            return
-        if not self.White_to_move and (self.black & f == 0):
-            return
-        
-        # dont capture own pieces
-        if self.White_to_move and (self.white & t != 0):
-            return
-        if not self.White_to_move and (self.black & t != 0):
-            return
-        
-        # implementation is shit... I have to think of something better...
-
-        # check against computed move bitboards from some other function
-
-        move_info = (move_try, f, t)
-        self.make_move(move_info)
-        print(bin(self.white))
-        print(bin(self.black))
-
+        return moves
 
 
     def Generate_legal_moves(self, sq_nr):
@@ -407,7 +463,20 @@ class GameState(object):
         return pinned, pinner
 
 
+    def determin_result(self): 
+        '''
+        this function gets called if there are no legal move for one side, could be either stalemate or checkmate
 
+        function modifies the self.result variable
+        '''
+        king_sq = (self.White_to_move) * int(np.log2(self.p[10])) + (not self.White_to_move) * int(np.log2(self.p[4]))
+        # is the king under attack ?
+        if self.attacks_on_king(king_sq, self.o, self.White_to_move) == 0: # draw
+            self.result = 0
+        elif self.White_to_move: # black wins
+            self.result = -1
+        else: # white wins
+            self.result = 1
 
     
 
