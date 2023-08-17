@@ -1,0 +1,3 @@
+# piecewise - Chess engine
+
+in progress...
