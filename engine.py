@@ -243,7 +243,7 @@ class GameState(object):
         
         # only one check
         if self.check:
-            if piece != 10 or piece != 4: # king can of course step out of the check
+            if piece != 10 and piece != 4: # king can of course step out of the check
                 # create mask of in between squares and checking piece. XOR it with moves
                 check_mask = sp.in_between[king_sq, int(np.log2(self.check))] | self.check
                 moves &= check_mask
