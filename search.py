@@ -39,14 +39,15 @@ def search(state:GameState, depth):
             return - np.inf # no moves avalible so whoevers turn it is has lost.
 
     # define best evaluation as - infinity to be overwritten by eval search
-    best_eval = - np.inf
+    best_eval = -np.inf
 
     if depth != 0:
         for move in valid_moves:
             state.make_move(move)
             eval = - search(state, depth - 1) # each time the function is called the perspective changes so the sign must be flipped!!
-            best_eval = max(eval, best_eval) # choose highest evaluation of this function call
+            best_eval = max(best_eval, eval)
             state.unmake_move()
+            # choose highest evaluation of this function call
 
     return best_eval
 
@@ -71,22 +72,28 @@ def initial_search(valid_moves, state:GameState, depth):
             best_move = move
         state.unmake_move()
         
-    return move
+    print(best_eval)
+    print(best_move)
+    return best_move
 
 
 def evaluation(state:GameState) -> float:
-    # for now just sum the value of all pieces on one side
-    eval = 0
-    if state.White_to_move: # White pieces
+    # evaluate the position based on material differance
+    eval = count_material(state, True) - count_material(state, False) # white - black material
+
+    return eval * ((1 * state.White_to_move) + (not state.White_to_move) * -1)
+
+def count_material(state, white):
+    count = 0
+    if white: # White pieces
         set = (6,7,8,9,11) # state.p indices for correct piecetype
     else:
         set = (0,1,2,3,5)
 
-    eval += sp.count_set_bits(state.p[set[0]]) * PAWN
-    eval += sp.count_set_bits(state.p[set[1]]) * ROOK
-    eval += sp.count_set_bits(state.p[set[2]]) * KINGHT
-    eval += sp.count_set_bits(state.p[set[3]]) * BISHOP
-    eval += sp.count_set_bits(state.p[set[4]]) * QUEEN
+    count += sp.count_set_bits(state.p[set[0]]) * PAWN
+    count += sp.count_set_bits(state.p[set[1]]) * ROOK
+    count += sp.count_set_bits(state.p[set[2]]) * KINGHT
+    count += sp.count_set_bits(state.p[set[3]]) * BISHOP
+    count += sp.count_set_bits(state.p[set[4]]) * QUEEN
 
-
-    return eval
+    return count

@@ -11,6 +11,7 @@ py.init()
 W, H = 640, 640
 SQ = W / 8
 FPS = 30
+FEN1 = 'rn1qk2r/pp2nppp/1bp1p3/3pPb2/1P1P4/2P2N2/P2BBPPP/RN1Q1RK1 b kq - 0 9'
 
 # Import PNGs of Pieces
 IMAG = []
@@ -28,7 +29,7 @@ BOARD_COLORS = (py.Color(254, 203, 136), py.Color(159, 90, 50))
 HIGHLIGHT_COLOR = py.Color('yellowgreen')
 TARGET_COLOR = py.Color('sienna3')
 
-black_bot = False
+black_bot = True
 white_bot = True
 
 
@@ -41,11 +42,21 @@ def main():
     screen.fill(BOARD_COLORS[0])
 
     state = GameState()
+    state.read_FEN_string(FEN1)
     Square_highlighted = None
     legal_moves = np.uint64(0)
 
     running = True
     while running:
+        # only bot player
+        if ((state.White_to_move and white_bot) or (not state.White_to_move and black_bot)) and state.result == None:
+            valid_moves = state.generate_all_valid_moves()
+            if len(valid_moves) == 0:
+                state.set_resulte()
+            else:
+                best_move = search.initial_search(valid_moves, state, 3)
+                state.make_move(best_move)
+
         for event in py.event.get():
             if event.type == py.QUIT:
                 running = False
@@ -73,13 +84,7 @@ def main():
                         Square_highlighted = None
                         legal_moves = np.uint64(0)
 
-        # only bot player
-        if ((state.White_to_move and white_bot) or (not state.White_to_move and black_bot)) and state.result == None:
-            valid_moves = state.generate_all_valid_moves()
-            if len(valid_moves) == 0:
-                state.set_resulte()
-            else:
-                state.make_move(search.initial_search(valid_moves, state, 3))
+        
 
         if state.result != None:
             print(f'Game over! \n Result: {state.result}')

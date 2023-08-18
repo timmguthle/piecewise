@@ -264,3 +264,10 @@ def count_set_bits(x:np.uint64):
         x &= x - np.uint64(1)
         counter += 1
     return counter
+
+letters_to_rank = {'a':0, 'b':1, 'c':2, 'd':3, 'e':4, 'f':5, 'g':6, 'h':7}
+
+def algebraic_notation_to_sq(notation:str):
+    rank = int(notation[-1]) - 1
+    file = letters_to_rank.get(notation[0])
+    return (rank * 8) + file

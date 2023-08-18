@@ -195,7 +195,7 @@ class GameState(object):
         if figure == 5 and move[0] - move[1] > 10:
             self.en_passant_next_move = np.left_shift(1, move[0] - 8, dtype=np.uint64)
 
-        self.update_castling_possibilities(move)
+        self.update_castling_possibilities(move, figure, castl)
 
         # controll if there is a check after move. If so save attacks on king in self.check variable
         if figure <= 5: # black moved
@@ -210,9 +210,15 @@ class GameState(object):
 
 
 
-    def update_castling_possibilities(self, move):
+    def update_castling_possibilities(self, move, figure, castl):
+        white = (figure > 5)
+        if castl and white:
+            self.castle_WK, self.castle_WQ = False, False
+        if castl and not white:
+            self.castle_BK, self.castle_BQ = False, False
+
         piece = self.figure_on_square(move[1])
-        white = (piece > 5)
+
         if white and (self.castle_WK or self.castle_WQ):
             if piece == 10:
                 self.castle_WK, self.castle_WQ = False, False
@@ -504,6 +510,68 @@ class GameState(object):
             if s & b != 0:
                 return i
         return False
+
+    def read_FEN_string(self, FEN:str):
+        self.p = np.zeros(12, dtype=np.uint64)
+        rank = 7
+        file = 0
+        translation = {
+            'r': 0,
+            'n': 1,
+            'b': 2,
+            'q': 3,
+            'k': 4,
+            'p': 5,
+            'R': 6,
+            'N': 7,
+            'B': 8,
+            'Q': 9,
+            'K': 10,
+            'P': 11,
+        }
+
+        split = FEN.split(' ')
+
+        for s in split[0]:
+            if s in translation.keys():
+                sq = (8*rank) + file
+                self.p[translation.get(s)] ^= np.left_shift(1, sq, dtype=np.uint64)
+                file += 1
+
+            elif s in ('1', '2', '3', '4', '5', '6', '7', '8'):
+                file += int(s)
+
+            elif s == '/':
+                rank -= 1
+                file = 0
+
+        if split[1] == 'w':
+            self.White_to_move = True
+        elif split[1] == 'b':
+            self.White_to_move = False
+
+        self.castle_BK, self.castle_BQ, self.castle_WK, self.castle_WQ = False, False, False, False
+        if 'K' in split[2]:
+            self.castle_WK = True
+        if 'k' in split[2]:
+            self.castle_BK = True
+        if 'Q' in split[2]:
+            self.castle_WQ = True
+        if 'q' in split[2]:
+            self.castle_BQ = True
+
+        if split[3] != '-':
+            self.en_passant_next_move = np.left_shift(1, sp.algebraic_notation_to_sq(split[3], dtype=np.uint64))
+
+        for _ in range(int(split[-1]) * 2):
+            self.move_log.append('No move info available')
+        
+        self.last_capture = len(self.move_log) - int(split[-2])
+        self.update_bb()
+
+
+
+            
             
 if __name__ == '__main__':
     state = GameState()
