@@ -257,3 +257,10 @@ def get_sq_from_bitboard(bitboard:np.uint64):
         bitboard &= bitboard - np.uint64(1)
 
     return sq_list
+
+def count_set_bits(x:np.uint64):
+    counter = 0
+    while x:
+        x &= x - np.uint64(1)
+        counter += 1
+    return counter

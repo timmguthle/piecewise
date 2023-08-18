@@ -473,10 +473,13 @@ class GameState(object):
         # is the king under attack ?
         if self.attacks_on_king(king_sq, self.o, self.White_to_move) == 0: # draw
             self.result = 0
+            return 0
         elif self.White_to_move: # black wins
             self.result = -1
+            return 1
         else: # white wins
             self.result = 1
+            return 1
 
     
 

@@ -4,8 +4,10 @@ import search
 import numpy as np
 import pygame as py
 import time
+import multiprocessing
 
 py.init()
+
 
 # constants
 W, H = 640, 640
@@ -29,7 +31,7 @@ HIGHLIGHT_COLOR = py.Color('yellowgreen')
 TARGET_COLOR = py.Color('sienna3')
 
 black_bot = True
-white_bot = True
+white_bot = False
 
 
 def main():
@@ -43,6 +45,8 @@ def main():
     state = GameState()
     Square_highlighted = None
     legal_moves = np.uint64(0)
+    move_search_running = False
+    q = multiprocessing.Queue()
 
     running = True
     while running:
@@ -75,11 +79,20 @@ def main():
 
         # only bot player
         if ((state.White_to_move and white_bot) or (not state.White_to_move and black_bot)) and state.result == None:
-            valid_moves = state.generate_all_valid_moves()
-            if len(valid_moves) == 0:
-                state.determin_result()
-            else:
-                state.make_move(search.find_move(valid_moves))
+            if not move_search_running:
+                valid_moves = state.generate_all_valid_moves()
+                if len(valid_moves) == 0:
+                    state.determin_result()
+                else:
+                    # handle process
+                    move_process = multiprocessing.Process(target=initial_search, args=(state, 3, q, valid_moves))
+                    move_process.start()
+                    move_search_running = True
+
+        if move_search_running and not move_process.is_alive():
+            result = q.get()
+            state.make_move(result)
+            move_search_running = False
 
         if state.result != None:
             print(f'Game over! \n Result: {state.result}')
@@ -128,6 +141,31 @@ def highlight_possible_moves(screen:py.Surface, legal_moves):
             file = sq % 8
             rank = 7 - sq // 8
             screen.fill(TARGET_COLOR, py.Rect(file * SQ, rank * SQ, SQ, SQ))
+
+
+def initial_search(state:GameState, depth, q, valid_moves):
+    '''
+    function called at the beginning of the search 
+
+    this function calls the search function which then gets called recursivly
+    '''
+    
+    # here move ordering later
+
+    # define best evaluation as - infinity to be overwritten by eval search
+    best_eval = - np.inf
+    move_index = 0
+
+    for n, move in enumerate(valid_moves):
+        state.make_move(move)
+        eval = - search.search(state, depth - 1) # each time the function is called the perspective changes so the sign must be flipped!!
+        if eval > best_eval:
+            best_eval = eval
+            move_index = n
+        state.unmake_move()
+        
+    move = valid_moves[move_index]
+    q.put(move)
 
 
 
