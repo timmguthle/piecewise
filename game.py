@@ -28,7 +28,7 @@ BOARD_COLORS = (py.Color(254, 203, 136), py.Color(159, 90, 50))
 HIGHLIGHT_COLOR = py.Color('yellowgreen')
 TARGET_COLOR = py.Color('sienna3')
 
-black_bot = True
+black_bot = False
 white_bot = True
 
 
@@ -77,9 +77,9 @@ def main():
         if ((state.White_to_move and white_bot) or (not state.White_to_move and black_bot)) and state.result == None:
             valid_moves = state.generate_all_valid_moves()
             if len(valid_moves) == 0:
-                state.determin_result()
+                state.set_resulte()
             else:
-                state.make_move(search.find_move(valid_moves))
+                state.make_move(search.initial_search(valid_moves, state, 3))
 
         if state.result != None:
             print(f'Game over! \n Result: {state.result}')

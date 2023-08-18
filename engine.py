@@ -59,6 +59,7 @@ class GameState(object):
         self.castle_BQ, self.castle_BK, self.castle_WK, self.castle_WQ = move_info.get('castling_rights')
         self.en_passant_next_move = move_info.get('en_passant_possible')
         self.last_capture = move_info.get('last_capture')
+        self.check = move_info.get('check')
         move = move_info.get('move')
         pieces = move_info.get('pieces') # fist entry is moved piece
 
@@ -78,8 +79,10 @@ class GameState(object):
         elif move_info.get('promotion'):
             if pieces[0] == 5: # black pawn
                 self.p[3] ^= np.left_shift(1, move[1], dtype=np.uint64)
+                self.p[5] ^= np.left_shift(1, move[0], dtype=np.uint64)
             elif pieces[0] == 11: # white pawn
                 self.p[9] ^= np.left_shift(1, move[1], dtype=np.uint64)
+                self.p[11] ^= np.left_shift(1, move[0], dtype=np.uint64)
         elif move_info.get('en_passant'):
             if pieces[0] == 5: # black pawn
                 self.p[11] ^= np.left_shift(1, (move[1] + 8), dtype=np.uint64)
@@ -89,7 +92,8 @@ class GameState(object):
         if pieces[1] != None:
             self.p[pieces[1]] ^= np.left_shift(1, move[1], dtype=np.uint64)
 
-        self.p[pieces[0]] ^= (np.left_shift(1, move[0], dtype=np.uint64) | np.left_shift(1, move[1], dtype=np.uint64))
+        if not move_info.get('promotion'):
+            self.p[pieces[0]] ^= (np.left_shift(1, move[0], dtype=np.uint64) | np.left_shift(1, move[1], dtype=np.uint64))
 
         self.update_bb()
         self.White_to_move = not self.White_to_move
@@ -178,6 +182,7 @@ class GameState(object):
             'en_passant': en_passant,
             'en_passant_possible': self.en_passant_next_move,
             'last_capture': old_last_capture,
+            'check':self.check,
         }
         self.move_log.append(move_info)
 
@@ -469,6 +474,16 @@ class GameState(object):
 
         function modifies the self.result variable
         '''
+        king_sq = (self.White_to_move) * int(np.log2(self.p[10])) + (not self.White_to_move) * int(np.log2(self.p[4]))
+        # is the king under attack ?
+        if self.attacks_on_king(king_sq, self.o, self.White_to_move) == 0: # draw
+            return 0
+        elif self.White_to_move: # black wins
+            return -1
+        else: # white wins
+            return 1
+
+    def set_resulte(self):
         king_sq = (self.White_to_move) * int(np.log2(self.p[10])) + (not self.White_to_move) * int(np.log2(self.p[4]))
         # is the king under attack ?
         if self.attacks_on_king(king_sq, self.o, self.White_to_move) == 0: # draw
