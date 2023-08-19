@@ -237,11 +237,21 @@ class GameState(object):
     def generate_all_valid_moves(self):
         moves = []
         own_color = self.White_to_move * self.white + (not self.White_to_move) * self.black
-        for sq in range(64): # maybe the approach with while own_color is better here idk...
-            if own_color & np.left_shift(1, sq, dtype=np.uint64):
-                move_from_sq = sp.get_sq_from_bitboard(self.Generate_legal_moves(sq))
-                for target in move_from_sq:
-                    moves.append((sq, target))
+        # for sq in range(64): # maybe the approach with while own_color is better here idk...
+        #     if own_color & np.left_shift(1, sq, dtype=np.uint64):
+        #         move_from_sq = sp.get_sq_from_bitboard(self.Generate_legal_moves(sq))
+        #         for target in move_from_sq:
+        #             moves.append((sq, target))
+
+        # new methode
+        while own_color:
+            sq = int(np.log2(own_color & -own_color))
+            move_from_sq = self.Generate_legal_moves(sq)
+            while move_from_sq:
+                target = int(np.log2(move_from_sq & -move_from_sq))
+                moves.append((sq, target))
+                move_from_sq &= move_from_sq - np.uint64(1)
+            own_color &= own_color - np.uint64(1)
 
         return moves
 

@@ -30,7 +30,7 @@ HIGHLIGHT_COLOR = py.Color('yellowgreen')
 TARGET_COLOR = py.Color('sienna3')
 
 black_bot = True
-white_bot = True
+white_bot = False
 
 
 def main():
@@ -54,7 +54,7 @@ def main():
             if len(valid_moves) == 0:
                 state.set_resulte()
             else:
-                best_move = search.initial_search(valid_moves, state, 3)
+                best_move = search.initial_search(valid_moves, state, 4)
                 state.make_move(best_move)
 
         for event in py.event.get():
